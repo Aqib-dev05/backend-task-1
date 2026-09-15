@@ -1,25 +1,55 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "Task API",
+    "title": "Auth API — FlyRank Backend Track A4",
     "version": "1.0.0",
-    "description": "A simple in-memory CRUD API for managing tasks — built for FlyRank Internship Week 2."
+    "description": "Secure REST API using Supabase Auth — Sign Up, Log In, Log Out, and JWT-protected routes."
+  },
+  "servers": [
+    { "url": "http://localhost:3000", "description": "Local development server" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Paste the access_token you receive from POST /auth/login"
+      }
+    },
+    "schemas": {
+      "AuthBody": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email":    { "type": "string", "example": "test@example.com" },
+          "password": { "type": "string", "example": "password123" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" }
+        }
+      }
+    }
   },
   "paths": {
-    "/": {
+    "/public/info": {
       "get": {
-        "summary": "API info",
-        "description": "Returns the API name, version, and available endpoints.",
-        "tags": ["Info"],
+        "tags": ["Public"],
+        "summary": "Public info — no auth needed",
         "responses": {
           "200": {
-            "description": "API metadata",
+            "description": "Public welcome message",
             "content": {
               "application/json": {
-                "example": {
-                  "name": "Task API",
-                  "version": "1.0",
-                  "endpoints": ["/tasks"]
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message":   { "type": "string" },
+                    "timestamp": { "type": "string" }
+                  }
                 }
               }
             }
@@ -27,247 +57,111 @@
         }
       }
     },
-    "/health": {
-      "get": {
-        "summary": "Health check",
-        "description": "Returns server health status. Real companies ping this endpoint to know a server is alive.",
-        "tags": ["Info"],
-        "responses": {
-          "200": {
-            "description": "Server is healthy",
-            "content": {
-              "application/json": {
-                "example": { "status": "ok" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/tasks": {
-      "get": {
-        "summary": "List all tasks",
-        "description": "Returns all tasks. Supports optional filtering by done status and keyword search.",
-        "tags": ["Tasks"],
-        "parameters": [
-          {
-            "name": "done",
-            "in": "query",
-            "description": "Filter by completion status (true or false)",
-            "required": false,
-            "schema": { "type": "boolean" }
-          },
-          {
-            "name": "search",
-            "in": "query",
-            "description": "Filter tasks whose title contains this keyword (case-insensitive)",
-            "required": false,
-            "schema": { "type": "string" }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Array of tasks",
-            "content": {
-              "application/json": {
-                "example": [
-                  { "id": 1, "title": "Learn Express.js", "done": false },
-                  { "id": 2, "title": "Build CRUD API",   "done": true  }
-                ]
-              }
-            }
-          }
-        }
-      },
+    "/auth/signup": {
       "post": {
-        "summary": "Create a new task",
-        "description": "Creates a task with the given title. The server assigns the id and sets done to false.",
-        "tags": ["Tasks"],
+        "tags": ["Auth"],
+        "summary": "Sign up — create a new account",
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["title"],
-                "properties": {
-                  "title": { "type": "string", "example": "Buy milk" }
-                }
-              }
-            }
+            "application/json": { "schema": { "$ref": "#/components/schemas/AuthBody" } }
           }
         },
         "responses": {
-          "201": {
-            "description": "Task created",
-            "content": {
-              "application/json": {
-                "example": { "id": 4, "title": "Buy milk", "done": false }
-              }
-            }
-          },
+          "201": { "description": "User created successfully" },
           "400": {
-            "description": "title is missing or empty",
-            "content": {
-              "application/json": {
-                "example": { "error": "title is required and cannot be empty" }
-              }
-            }
+            "description": "Missing email or password",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
           }
         }
       }
     },
-    "/tasks/{id}": {
-      "get": {
-        "summary": "Get a single task",
-        "description": "Returns the task with the given id. Returns 404 if not found.",
-        "tags": ["Tasks"],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Task id",
-            "schema": { "type": "integer", "example": 1 }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Task found",
-            "content": {
-              "application/json": {
-                "example": { "id": 1, "title": "Learn Express.js", "done": false }
-              }
-            }
-          },
-          "404": {
-            "description": "Task not found",
-            "content": {
-              "application/json": {
-                "example": { "error": "Task 99 not found" }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "summary": "Update a task",
-        "description": "Updates a task's title and/or done status. Returns the updated task.",
-        "tags": ["Tasks"],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Task id",
-            "schema": { "type": "integer", "example": 1 }
-          }
-        ],
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Log in — returns a JWT access token",
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "title": { "type": "string",  "example": "Updated title" },
-                  "done":  { "type": "boolean", "example": true }
-                }
-              }
-            }
+            "application/json": { "schema": { "$ref": "#/components/schemas/AuthBody" } }
           }
         },
         "responses": {
           "200": {
-            "description": "Task updated",
+            "description": "Login successful — copy the access_token and paste it into Authorize ↑",
             "content": {
               "application/json": {
-                "example": { "id": 1, "title": "Updated title", "done": true }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid body",
-            "content": {
-              "application/json": {
-                "example": { "error": "title cannot be empty" }
-              }
-            }
-          },
-          "404": {
-            "description": "Task not found",
-            "content": {
-              "application/json": {
-                "example": { "error": "Task 99 not found" }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "summary": "Delete a task",
-        "description": "Removes the task from the list. Returns 204 No Content on success.",
-        "tags": ["Tasks"],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Task id",
-            "schema": { "type": "integer", "example": 1 }
-          }
-        ],
-        "responses": {
-          "204": { "description": "Task deleted — no body returned" },
-          "404": {
-            "description": "Task not found",
-            "content": {
-              "application/json": {
-                "example": { "error": "Task 99 not found" }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/stats": {
-      "get": {
-        "summary": "Task statistics",
-        "description": "Returns total, done, and open task counts.",
-        "tags": ["Extras"],
-        "responses": {
-          "200": {
-            "description": "Task counts",
-            "content": {
-              "application/json": {
-                "example": { "total": 3, "done": 1, "open": 2 }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/reset": {
-      "post": {
-        "summary": "Reset to seed data",
-        "description": "Restores the original 3 example tasks. Useful for demos.",
-        "tags": ["Extras"],
-        "responses": {
-          "200": {
-            "description": "Tasks reset",
-            "content": {
-              "application/json": {
-                "example": {
-                  "message": "Tasks reset to seed data",
-                  "tasks": [
-                    { "id": 1, "title": "Learn Express.js", "done": false },
-                    { "id": 2, "title": "Build CRUD API",   "done": true  },
-                    { "id": 3, "title": "Push to GitHub",   "done": false }
-                  ]
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message":       { "type": "string" },
+                    "access_token":  { "type": "string" },
+                    "refresh_token": { "type": "string" },
+                    "expires_in":    { "type": "integer" },
+                    "user":          { "type": "object" }
+                  }
                 }
               }
             }
+          },
+          "400": { "description": "Missing fields" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Log out — ends the session",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "204": { "description": "Logged out — no content returned" },
+          "401": { "description": "Missing or invalid token" }
+        }
+      }
+    },
+    "/protected/profile": {
+      "get": {
+        "tags": ["Protected"],
+        "summary": "Your private profile — requires valid JWT",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "User profile data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" },
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "id":         { "type": "string" },
+                        "email":      { "type": "string" },
+                        "created_at": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid/expired token",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
           }
+        }
+      }
+    },
+    "/protected/dashboard": {
+      "get": {
+        "tags": ["Protected"],
+        "summary": "Your private dashboard — requires valid JWT",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Dashboard stats for the logged-in user" },
+          "401": { "description": "Missing or invalid/expired token" }
         }
       }
     }

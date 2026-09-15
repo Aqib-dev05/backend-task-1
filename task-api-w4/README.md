@@ -1,173 +1,201 @@
-# Task API — v3 (PostgreSQL + Docker)
+# Auth API — FlyRank Backend Track · Week 2 · A4
 
-FlyRank Internship · Backend Track · Week 4 · Assignment A3
-
-Same five endpoints. Third storage engine. One command starts everything.
-
-| Assignment | Storage | Restart? |
-|---|---|---|
-| A1 | In-memory array | Data lost 💀 |
-| A2 | SQLite file (`tasks.db`) | Data survives ✅ |
-| A3 (this) | PostgreSQL in Docker | Data survives ✅ + runs anywhere |
+Secure REST API built with **Node.js + Express** and **Supabase Auth**.  
+Handles Sign Up, Log In, Log Out, and guards private endpoints with JWT verification middleware.
 
 ---
 
-## One-command startup
+## What this project is
+
+A stateless API that delegates user authentication to Supabase as an Identity Provider. Your server never stores passwords — Supabase hashes them and issues signed JWTs. Your backend's only job is to:
+
+1. Forward credentials to Supabase
+2. Receive the JWT back
+3. Verify that JWT on every protected request using a single reusable middleware guard
+
+---
+
+## Setup
+
+### 1. Clone and install
 
 ```bash
-cp .env.example .env          # first time only
-docker compose up             # starts API + Postgres together
+git clone https://github.com/<your-username>/auth-api.git
+cd auth-api
+npm install
 ```
 
-`tasks.db` is gone. `tasks.db` was SQLite — Postgres runs as its own container now.  
-All data lives in a Docker **volume** (`taskdata`) so it survives `docker compose down && up`.
+### 2. Create your Supabase project
 
-Stop everything:
+1. Go to [supabase.com](https://supabase.com) → create a free project
+2. Open **Project Settings → API** and copy your **Project URL** and **anon key**
+3. Go to **Authentication → Sign In / Providers → Email** and **turn off "Confirm email"** (for dev)
+
+### 3. Set up environment variables
+
 ```bash
-docker compose down           # keeps data
-docker compose down -v        # wipes volume (fresh start)
+cp .env.example .env
+```
+
+Then open `.env` and fill in your real values:
+
+```env
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_KEY=your-anon-public-key-here
+PORT=3000
+```
+
+> ⚠️ Never commit `.env`. It's already in `.gitignore`.
+
+### 4. Run the server
+
+```bash
+npm start
+# or for auto-reload during dev:
+npm run dev
+```
+
+Server logs:
+```
+✅  Server running on http://localhost:3000
+📖  Swagger docs  → http://localhost:3000/docs
+🔑  Connected to Supabase: https://xxx.supabase.co
 ```
 
 ---
 
-## Environment variables
+## API Reference
 
-Copy `.env.example` → `.env` and set:
+| Method | Endpoint | Auth Required | Description | Success |
+|--------|----------|:-------------:|-------------|---------|
+| `GET` | `/public/info` | ❌ No | Public welcome message | 200 |
+| `POST` | `/auth/signup` | ❌ No | Create a new account | 201 |
+| `POST` | `/auth/login` | ❌ No | Authenticate & get JWT | 200 |
+| `POST` | `/auth/logout` | ✅ Yes | End session | 204 |
+| `GET` | `/protected/profile` | ✅ Yes | Read private user data | 200 |
+| `GET` | `/protected/dashboard` | ✅ Yes | Read private dashboard | 200 |
 
-| Variable | Example | Purpose |
-|---|---|---|
-| `DATABASE_URL` | `postgres://postgres:dev@localhost:5432/tasks` | Postgres connection string |
-| `PORT` | `3000` | API port (optional, defaults to 3000) |
-
-> ⚠️ `.env` is **git-ignored**. Never commit real passwords.  
-> `.env.example` is committed — it shows which keys to set, with placeholders only.
-
----
-
-## Endpoints
-
-| Method | Path | Description | Status |
-|---|---|---|---|
-| GET | `/` | API info | 200 |
-| GET | `/health` | Health check (pings DB) | 200, 503 |
-| GET | `/tasks` | List all tasks | 200 |
-| GET | `/tasks/:id` | Get one task | 200, 404 |
-| POST | `/tasks` | Create `{ "title": "..." }` | 201, 400 |
-| PUT | `/tasks/:id` | Update title / done | 200, 400, 404 |
-| DELETE | `/tasks/:id` | Delete a task | 204, 404 |
-| GET | `/stats` | Total / done / open (SQL COUNT FILTER) | 200 |
-
-### Query parameters (GET /tasks)
-
-| Param | Example | SQL |
-|---|---|---|
-| `done` | `?done=true` | `WHERE done = $1` |
-| `search` | `?search=milk` | `WHERE title ILIKE $1` |
-
----
-
-## curl -i sample output
-
+**Auth header format for protected routes:**
 ```
-$ curl -i -X POST http://localhost:3000/tasks \
+Authorization: Bearer <your_access_token>
+```
+
+**Error responses** always return JSON:
+```json
+{ "error": "Description of what went wrong" }
+```
+
+**Status codes used:**
+| Code | Meaning |
+|------|---------|
+| 200 | OK |
+| 201 | Created (signup success) |
+| 204 | No Content (logout success) |
+| 400 | Bad Request — missing email or password |
+| 401 | Unauthorized — missing, malformed, or expired token |
+| 403 | Forbidden — authenticated but not allowed |
+
+---
+
+## Testing with curl
+
+**Full happy path:**
+
+```bash
+# 1. Sign up
+curl -i -X POST http://localhost:3000/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{"title":"Buy milk"}'
+  -d '{"email":"test@example.com","password":"password123"}'
+# → 201
 
-HTTP/1.1 201 Created
-Content-Type: application/json; charset=utf-8
+# 2. Log in — copy the access_token from the response
+curl -i -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}'
+# → 200 + access_token
 
-{"id":4,"title":"Buy milk","done":false,"created_at":"2026-09-15T10:00:00.000Z"}
-```
+# 3. Access protected profile (paste your token)
+curl -i http://localhost:3000/protected/profile \
+  -H "Authorization: Bearer <YOUR_ACCESS_TOKEN>"
+# → 200 + user data
 
-```
-$ curl -i http://localhost:3000/tasks/999
+# 4. Tamper the token — one character changed
+curl -i http://localhost:3000/protected/profile \
+  -H "Authorization: Bearer <YOUR_TOKEN_BUT_LAST_CHAR_CHANGED>"
+# → 401 Invalid or expired token
 
-HTTP/1.1 404 Not Found
+# 5. Logout
+curl -i -X POST http://localhost:3000/auth/logout \
+  -H "Authorization: Bearer <YOUR_ACCESS_TOKEN>"
+# → 204
 
-{"error":"Task 999 not found"}
-```
-
-```
-$ curl -i -X DELETE http://localhost:3000/tasks/1
-
-HTTP/1.1 204 No Content
-```
-
----
-
-
-## Why Postgres over SQLite?
-
-| | SQLite | PostgreSQL |
-|---|---|---|
-| Setup | Zero — single file | Runs as its own server (Docker) |
-| Concurrent writers | Limited | Unlimited |
-| Data types | Loose typing | Strict, rich types |
-| Used in production | Small/embedded apps | Most of the world's backends |
-| FlyRank uses | — | ✅ |
-
-SQLite was perfect for a single-developer dev tool. Postgres is what you'd actually deploy — and Docker makes it just as easy to run locally.
-
----
-
-## How the storage swap works
-
-The same `curl` commands from A1 work unchanged on Postgres:
-
-```bash
-curl -i http://localhost:3000/tasks          # 200
-curl -i http://localhost:3000/tasks/1        # 200
-curl -i -X POST ... -d '{"title":"x"}'      # 201
-curl -i -X PUT  ... -d '{"done":true}'      # 200
-curl -i -X DELETE http://localhost:3000/tasks/1  # 204
-```
-
-Three storage engines. Zero route changes. Storage is "just an implementation detail" — the API is the promise; the database is just where the promise is kept.
-
----
-
-## Key differences: SQLite → Postgres
-
-| | SQLite (`better-sqlite3`) | Postgres (`pg`) |
-|---|---|---|
-| Queries | Synchronous | Async/await |
-| Placeholders | `?` | `$1, $2, $3` |
-| Auto-increment | `INTEGER PRIMARY KEY AUTOINCREMENT` | `SERIAL PRIMARY KEY` |
-| Boolean | Stored as 0/1 | Native `BOOLEAN` |
-| Get inserted row | Query again by rowid | `INSERT … RETURNING *` |
-| Case-insensitive search | `LIKE` | `ILIKE` |
-
----
-
-## Stretch goals
-
-- **Real health check** — `GET /health` pings `SELECT 1` and returns `{ db: "ok" }` or `503`. Load balancers use this to know when to route traffic.
-- **SQL stats** — `GET /stats` uses `COUNT(*) FILTER (WHERE done)` — computed in the DB
-- **ILIKE search** — `?search=milk` uses Postgres `ILIKE` (case-insensitive, no extra code)
-- **Multi-stage Dockerfile** — builder stage installs deps, final image copies only what's needed (smaller image)
-- **depends_on healthcheck** — `api` waits for `db` to pass `pg_isready` before starting
-
----
-
-## Git commit history
-
-```
-Stage 0: Postgres in Docker + gitignore
-Stage 1: connect via .env and create table
-Stage 2: read from Postgres
-Stage 3: full CRUD on Postgres
-Stage 4: docker-compose the whole stack
-Stage 5: one-command stack + docs
-Extras:  health DB ping, stats FILTER, ILIKE, multi-stage Dockerfile
+# 6. Public route — no token needed
+curl -i http://localhost:3000/public/info
+# → 200
 ```
 
 ---
 
-## Tech
+## Swagger UI
 
-- **Runtime** — Node.js 20
-- **Framework** — Express
-- **Database** — PostgreSQL 16 (Docker)
-- **Driver** — `pg` (node-postgres)
-- **Container** — Docker + Compose
-- **API docs** — swagger-ui-express + OpenAPI 3.0
+Open **http://localhost:3000/docs** in your browser.
+
+1. Click **Authorize 🔒**
+2. Paste your `access_token` from `/auth/login`
+3. Click **Try it out** on any protected route — no curl needed
+
+
+---
+
+## Project structure
+
+```
+auth-api/
+├── server.js               ← Entry point: Express app, routes, Swagger
+├── supabaseClient.js       ← Single Supabase client (reads from .env)
+├── middleware/
+│   └── authGuard.js        ← Reusable JWT verification middleware
+├── routes/
+│   ├── auth.js             ← POST /auth/signup, /login, /logout
+│   ├── protected.js        ← GET /protected/profile, /dashboard
+│   └── public.js           ← GET /public/info
+├── openapi.json            ← OpenAPI 3.0 spec with BearerAuth scheme
+├── .env.example            ← Key names with placeholder values (safe to commit)
+├── .gitignore              ← Ignores .env and node_modules
+└── README.md
+```
+
+---
+
+## How the auth flow works
+
+```
+Client              Your Server         Supabase
+  │                     │                   │
+  │── POST /auth/login ─►│                   │
+  │                     │── signInWithPwd ──►│
+  │                     │◄── JWT ────────────│
+  │◄── access_token ────│                   │
+  │                     │                   │
+  │── GET /protected ──►│                   │
+  │   Authorization:    │── getUser(jwt) ──►│
+  │   Bearer <token>    │◄── user ───────────│
+  │◄── 200 user data ───│                   │
+```
+
+The `authGuard` middleware sits between the request and the route handler. It verifies the token with Supabase before the route body ever runs.
+
+---
+
+## The 401 vs 403 difference
+
+| Code | Meaning | When |
+|------|---------|------|
+| **401** Unauthorized | "I don't know who you are" | Token missing, malformed, or expired |
+| **403** Forbidden | "I know who you are — and still no" | Valid token, but user lacks permission |
+
+A 403 would apply if you added role-based access: e.g. an `/admin` route that's accessible only to users with `role: admin` in their JWT metadata. A regular logged-in user would get 401 on a public route (no token) but **403** on the admin route (valid token, wrong role).
+
+---
+
+*FlyRank Backend Track · Week 2 · Assignment A4*
