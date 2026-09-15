@@ -1,0 +1,12 @@
+# Generated artifacts — never commit produced files
+reports/
+report.db
+report.db-journal
+report.db-wal
+report.db-shm
+
+# The seed script is the source of truth for the data, not the database
+
+node_modules/
+*.log
+.DS_Store

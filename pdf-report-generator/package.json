@@ -1,0 +1,20 @@
+{
+  "name": "pdf-report-generator",
+  "version": "1.0.0",
+  "description": "Query data with SQL, render it into a real PDF report, and serve the file by link. FlyRank Internship W4-A8.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "seed": "node src/seed.js",
+    "test:report": "node scripts/test-report.js",
+    "test:pdf": "node scripts/test-pdf.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "express": "^4.21.2",
+    "playwright": "^1.49.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
