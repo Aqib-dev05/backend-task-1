@@ -1,0 +1,169 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Auth API — FlyRank Backend Track A4",
+    "version": "1.0.0",
+    "description": "Secure REST API using Supabase Auth — Sign Up, Log In, Log Out, and JWT-protected routes."
+  },
+  "servers": [
+    { "url": "http://localhost:3000", "description": "Local development server" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Paste the access_token you receive from POST /auth/login"
+      }
+    },
+    "schemas": {
+      "AuthBody": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email":    { "type": "string", "example": "test@example.com" },
+          "password": { "type": "string", "example": "password123" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/public/info": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "Public info — no auth needed",
+        "responses": {
+          "200": {
+            "description": "Public welcome message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message":   { "type": "string" },
+                    "timestamp": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/signup": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Sign up — create a new account",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/AuthBody" } }
+          }
+        },
+        "responses": {
+          "201": { "description": "User created successfully" },
+          "400": {
+            "description": "Missing email or password",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Log in — returns a JWT access token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/AuthBody" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful — copy the access_token and paste it into Authorize ↑",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message":       { "type": "string" },
+                    "access_token":  { "type": "string" },
+                    "refresh_token": { "type": "string" },
+                    "expires_in":    { "type": "integer" },
+                    "user":          { "type": "object" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Missing fields" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Log out — ends the session",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "204": { "description": "Logged out — no content returned" },
+          "401": { "description": "Missing or invalid token" }
+        }
+      }
+    },
+    "/protected/profile": {
+      "get": {
+        "tags": ["Protected"],
+        "summary": "Your private profile — requires valid JWT",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "User profile data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" },
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "id":         { "type": "string" },
+                        "email":      { "type": "string" },
+                        "created_at": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid/expired token",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/protected/dashboard": {
+      "get": {
+        "tags": ["Protected"],
+        "summary": "Your private dashboard — requires valid JWT",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Dashboard stats for the logged-in user" },
+          "401": { "description": "Missing or invalid/expired token" }
+        }
+      }
+    }
+  }
+}
